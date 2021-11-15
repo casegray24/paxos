@@ -1,5 +1,6 @@
 import React from "react";
 import * as d3 from "d3";
+import { SimulationNodeDatum } from "d3-force";
 
 enum NodeType {
     Acceptor,
@@ -22,7 +23,7 @@ interface NodeProps {
 
 class Network {
 
-    constructor(public acceptors: Array<Node>, public proposer: Node) {  }
+    constructor(public acceptors: Array<Node> = [], public proposer: Node) {  }
 
     set proposerId(id: number) {
         // Only one active proposer at a time
@@ -43,13 +44,20 @@ class Network {
         this.proposer.nodeType = NodeType.Proposer;
     }
 
-    addAcceptor(acceptor: Node) {
-        this.acceptors.push(acceptor)
+    registerNode(node: Node, nodeType: NodeType) {
+        switch(nodeType) {
+            case(NodeType.Acceptor):
+                this.acceptors.push(node);
+                break;
+            case(NodeType.Proposer):
+                this.proposer = node;
+                break;
+        }
     }
 
 }
 
-class Node {
+class Node implements SimulationNodeDatum {
 
     static uniqueId = 0;
 
@@ -61,11 +69,15 @@ class Node {
     maxAcceptableProposalNumber: number;
     previousProposal: Proposal;
     id: number;
+    x: number;
+    y: number;
 
-    constructor(network: Network, errorPercentage: number, nodeType: NodeType) {
+    constructor(network: Network, errorPercentage: number, nodeType: NodeType, x: number = 0, y: number = 0) {
         this.network = network;
         this.errorPercentage = errorPercentage;
         this.nodeType = nodeType;
+        this.x = 0;
+        this.y = 0;
         this.chosenValue = 0;
         this.nextProposalnumber = 0;
         this.maxAcceptableProposalNumber = 0;
@@ -140,7 +152,8 @@ class Node {
 } 
 
 interface NetworkGraphProps {
-    nodes: Array<Node>
+    nodeCount: number;
+    errorPercentage: number;
 }
 
 interface NetworkLink {
@@ -151,16 +164,29 @@ interface NetworkLink {
 export class NetworkGraph extends React.Component {
 
     ref!: SVGSVGElement
+    width: number = 500;
+    height: number = 500;
 
     constructor(props: NetworkGraphProps) {
         super(props)
+        let nodes = this.generateNodes(props.nodeCount);
         this.state = {
-            nodes: props.nodes,
-            links: this.getConnectedLinks(props.nodes)
+            nodeCount: props.nodeCount,
+            errorPercentage: props.errorPercentage,
+            links: this.getConnectedLinks(nodes)
         }
     }
 
-    getConnectedLinks(nodes: Array<Node>) {
+    generateNodes(nodeCount: number): Array<Node> {
+        if(nodeCount < 0) {
+            throw new Error("Number must be positive");
+        }
+        let network: Network = new Network();
+        let acceptors: Array<Node> = []
+        let proposer: Node = new Node();
+    }
+
+    getConnectedLinks(nodes: Array<Node>): Array<NetworkLink> {
         let links: Array<NetworkLink> = [];
         for(let node of nodes) {
             for(let i = 0; i < nodes.length; i++) {
@@ -179,65 +205,65 @@ export class NetworkGraph extends React.Component {
     buildGraph(nodes: Array<Node>, links: Array<NetworkLink>) {
         const svg = d3.select(this.ref)
 
-        var link = svg.selectAll("line")
+        var link: any = svg.selectAll("line")
             .data(links, function(d: any) { return d.source.id + "-" + d.target.id })
             .join("line")
             .style("stroke", "#aaa")
 
-        var node = svg.selectAll('g')
+        var node: any = svg.selectAll('g')
             .data(nodes, function(d: any) { return d.id })
             .join("g")
             .attr("class", "node")
 
-        var circle = node.append("circle")
+        var circle: any = node.append("circle")
             .attr("r", 30)
             .style("fill", "green")
 
-        var text = node.append("text")
+        var text: any = node.append("text")
             .style("text-anchor", "middle")
             .attr("y", 15)
 
-        text.text(function(d) { return d.previousProposal.number + ' ' + d.previousProposal.value })
+        text.text(function(d: any) { return d.previousProposal.number + ' ' + d.previousProposal.value })
 
-        var simulation = d3.forceSimulation(nodes)
+        var simulation: any = d3.forceSimulation(nodes)
             .force("link", d3.forceLink()
-                .id(function(d) { return d.id; })
+                .id(function(d: any) { return d.id; })
                 .links(links)
             )
             .force("charge", d3.forceManyBody().strength(-800))
-            .force("center", d3.forceCenter(width/2, height/2))
+            .force("center", d3.forceCenter(this.width/2, this.height/2))
             .on("tick", ticked);
         
         function ticked() {
             link
-                .attr("x1", function(d) { return d.source.x; })
-                .attr("y1", function(d) { return d.source.y; })
-                .attr("x2", function(d) { return d.target.x; })
-                .attr("y2", function(d) { return d.target.y; });
+                .attr("x1", function(d: any) { return d.source.x; })
+                .attr("y1", function(d: any) { return d.source.y; })
+                .attr("x2", function(d: any) { return d.target.x; })
+                .attr("y2", function(d: any) { return d.target.y; });
 
-            node.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")";})
+            node.attr("transform", function(d: any) { return "translate(" + d.x + "," + d.y + ")";})
 
-            circle.style("fill", (d) => d.nodeType == nodeType.ACCEPTOR ? 'gray' : 'green' )
+            circle.style("fill", (d: any) => d.nodeType == NodeType.Acceptor ? 'gray' : 'green' )
 
-            text.text(function(d) { return d.previousProposal.number + ' ' + d.previousProposal.value })
+            text.text(function(d: any) { return d.previousProposal.number + ' ' + d.previousProposal.value })
         }
 
-        node.on("click", (e, d) => d.network.proposerId = d.id)
+        node.on("click", (e: any, d: any) => d.network.proposerId = d.id)
 
-        function drag(simulation) {
+        function drag(simulation: any) {
 
-            function dragstarted(event) {
+            function dragstarted(event: any) {
                 if (!event.active) simulation.alphaTarget(0.3).restart();
                 event.subject.fx = event.subject.x;
                 event.subject.fy = event.subject.y;
             }
             
-            function dragged(event) {
+            function dragged(event: any) {
                 event.subject.fx = event.x;
                 event.subject.fy = event.y;
             }
             
-            function dragended(event) {
+            function dragended(event: any) {
                 if (!event.active) simulation.alphaTarget(0);
                 event.subject.fx = null;
                 event.subject.fy = null;
@@ -252,9 +278,9 @@ export class NetworkGraph extends React.Component {
         node.call(drag(simulation));
     }
 
-    componentDidMount() {
-        this.buildGraph([])
-    }
+    //componentDidMount() {
+    //    this.buildGraph([])
+    //}
 
     render() {
         return (<div className="svg_container">

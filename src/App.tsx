@@ -1,12 +1,12 @@
 import React from 'react';
 import logo from './logo.svg';
 import './App.css';
-import { NetworkGraph } from './components/NetworkGraph';
+import NetworkControls from './components/NetworkControls';
 
 function App() {
   return (
     <div className="App">
-      <NetworkGraph/>
+      <NetworkControls/>
     </div>
   );
 }
