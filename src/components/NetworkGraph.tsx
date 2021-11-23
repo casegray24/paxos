@@ -11,48 +11,31 @@ class Proposal {
     constructor(public number: number = -1, public value: number = -1) { }
 }
 
-interface NodeProps {
-    nodeType: NodeType;
-    errorPercentage: number;
-    chosenValue: number;
-    nextProposalnumber: number;
-    maxAcceptableProposalnumber: number;
-    previousProposal: Proposal;
-    id: number;
-}
-
 class Network {
 
-    constructor(public acceptors: Array<Node> = [], public proposer: Node) {  }
+    nodes: Array<Node>;
+    nodeIdLookup: { [key: number] : Node };
+    _proposerId?: number;
 
-    set proposerId(id: number) {
-        // Only one active proposer at a time
-        if(this.proposer.id == id) {
-            return
+    constructor(nodes: Array<Node> = []) {
+        this.nodeIdLookup = {};
+        this.nodes = [];
+        for(let node of nodes) {
+            this.registerNode(node);
         }
-
-        let newProposerIndex = this.acceptors.findIndex((node) => node.id == id)
-        if(newProposerIndex == -1) {
-            throw new Error("Provided node id is not present in the network");
-        }
-
-        let newProposer = this.acceptors.splice(newProposerIndex, 1)[0];
-        this.proposer.nodeType = NodeType.Acceptor;
-        this.acceptors.push(this.proposer);
-
-        this.proposer = newProposer;
-        this.proposer.nodeType = NodeType.Proposer;
     }
 
-    registerNode(node: Node, nodeType: NodeType) {
-        switch(nodeType) {
-            case(NodeType.Acceptor):
-                this.acceptors.push(node);
-                break;
-            case(NodeType.Proposer):
-                this.proposer = node;
-                break;
+    set proposerId(id: number) {
+        if(this._proposerId) {
+            this.nodeIdLookup[this._proposerId].nodeType = NodeType.Acceptor;
         }
+        this.nodeIdLookup[id].nodeType = NodeType.Proposer;
+        this._proposerId = id;
+    }
+
+    registerNode(node: Node) {
+        this.nodeIdLookup[node.id] = node;
+        this.nodes.push(node);
     }
 
 }
@@ -103,7 +86,7 @@ class Node implements SimulationNodeDatum {
     prepare(proposalValue: number) {
         let maxProposal = new Proposal();
         let responses = 0;
-        for(let acceptor of this.network.acceptors) {
+        for(let acceptor of this.network.nodes) {
             try {
                 let proposal = acceptor.handlePrepare(this.nextProposalnumber);
                 if(proposal.number > maxProposal.number) {
@@ -114,7 +97,7 @@ class Node implements SimulationNodeDatum {
                 console.log(e);
             }
         }
-        if(responses > this.network.acceptors.length/2) {
+        if(responses > this.network.nodes.length/2) {
             if(maxProposal.number > -1) {
                 proposalValue = maxProposal.value;
             }
@@ -136,7 +119,7 @@ class Node implements SimulationNodeDatum {
 
     propose(proposal: Proposal) {
         let responses = 0;
-        for(let acceptor of this.network.acceptors) {
+        for(let acceptor of this.network.nodes) {
             try {
                 acceptor.handlePropose(proposal);
                 responses++;
@@ -144,7 +127,7 @@ class Node implements SimulationNodeDatum {
                 console.log(e);
             }
         }
-        if(responses > this.network.acceptors.length/2) {
+        if(responses > this.network.nodes.length/2) {
             this.chosenValue = proposal.value;
         }
     }
@@ -161,41 +144,45 @@ interface NetworkLink {
     target: number;
 }
 
-export class NetworkGraph extends React.Component {
+export class NetworkGraph extends React.Component<NetworkGraphProps> {
 
     ref!: SVGSVGElement
     width: number = 500;
     height: number = 500;
+    nodes: Node[];
+    links: NetworkLink[];
 
     constructor(props: NetworkGraphProps) {
         super(props)
-        let nodes = this.generateNodes(props.nodeCount);
-        this.state = {
-            nodeCount: props.nodeCount,
-            errorPercentage: props.errorPercentage,
-            links: this.getConnectedLinks(nodes)
-        }
+        this.nodes = this.generateNodes(props.nodeCount, props.errorPercentage);
+        this.links = this.getConnectedLinks(this.nodes);
     }
 
-    generateNodes(nodeCount: number): Array<Node> {
-        if(nodeCount < 0) {
-            throw new Error("Number must be positive");
+    generateNodes(nodeCount: number, errorPercentage: number): Array<Node> {
+        if(nodeCount <= 0) {
+            throw new Error("Number must be positive/nonzero");
         }
         let network: Network = new Network();
-        let acceptors: Array<Node> = []
-        let proposer: Node = new Node();
+        let nodes: Array<Node> = [];
+        let proposer: Node = new Node(network, errorPercentage, NodeType.Proposer);
+        nodes.push(proposer);
+        network.registerNode(proposer);
+        network.proposerId = proposer.id;
+        for(let i = 1; i < nodeCount; i++) {
+            let node = new Node(network, errorPercentage, NodeType.Acceptor);
+            network.registerNode(node);
+            nodes.push(node);
+        }
+        return nodes;
     }
 
     getConnectedLinks(nodes: Array<Node>): Array<NetworkLink> {
         let links: Array<NetworkLink> = [];
-        for(let node of nodes) {
-            for(let i = 0; i < nodes.length; i++) {
-                if(node.id == i) {
-                    continue;
-                }
+        for(let i = 0; i < nodes.length - 1; i ++) {
+            for(let j = i; j < nodes.length; j++) {
                 links.push({
-                    source: node.id,
-                    target: i
+                    source: nodes[i].id,
+                    target: nodes[j].id
                 });
             }
         }
@@ -203,6 +190,7 @@ export class NetworkGraph extends React.Component {
     }
 
     buildGraph(nodes: Array<Node>, links: Array<NetworkLink>) {
+
         const svg = d3.select(this.ref)
 
         var link: any = svg.selectAll("line")
@@ -243,7 +231,7 @@ export class NetworkGraph extends React.Component {
 
             node.attr("transform", function(d: any) { return "translate(" + d.x + "," + d.y + ")";})
 
-            circle.style("fill", (d: any) => d.nodeType == NodeType.Acceptor ? 'gray' : 'green' )
+            circle.style("fill", (d: any) => d.nodeType === NodeType.Acceptor ? 'gray' : 'green' )
 
             text.text(function(d: any) { return d.previousProposal.number + ' ' + d.previousProposal.value })
         }
@@ -278,13 +266,19 @@ export class NetworkGraph extends React.Component {
         node.call(drag(simulation));
     }
 
-    //componentDidMount() {
-    //    this.buildGraph([])
-    //}
+    componentDidUpdate() {
+        this.nodes = this.generateNodes(this.props.nodeCount, this.props.errorPercentage);
+        this.links = this.getConnectedLinks(this.nodes);
+        this.buildGraph(this.nodes, this.links);
+    }
+
+    componentDidMount() {
+        this.buildGraph(this.nodes, this.links);
+    }
 
     render() {
         return (<div className="svg_container">
-            <svg className="container" ref={(ref: SVGSVGElement) => this.ref = ref} width='100' height='100'></svg>
+            <svg className="container" ref={(ref: SVGSVGElement) => this.ref = ref} width='500' height='500'></svg>
         </div>)
     }
 }
