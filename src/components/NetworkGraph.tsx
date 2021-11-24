@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import * as d3 from "d3";
 import { SimulationNodeDatum } from "d3-force";
 
@@ -26,7 +26,7 @@ class Network {
     }
 
     set proposerId(id: number) {
-        if(this._proposerId) {
+        if(this._proposerId !== undefined) {
             this.nodeIdLookup[this._proposerId].nodeType = NodeType.Acceptor;
         }
         this.nodeIdLookup[id].nodeType = NodeType.Proposer;
@@ -40,7 +40,7 @@ class Network {
 
 }
 
-class Node implements SimulationNodeDatum {
+export class Node implements SimulationNodeDatum {
 
     static uniqueId = 0;
 
@@ -134,9 +134,12 @@ class Node implements SimulationNodeDatum {
 
 } 
 
+type proposerCallback = (id: number) => any;
+
 interface NetworkGraphProps {
     nodeCount: number;
     errorPercentage: number;
+    onProposerChange: proposerCallback;
 }
 
 interface NetworkLink {
@@ -144,19 +147,12 @@ interface NetworkLink {
     target: number;
 }
 
-export class NetworkGraph extends React.Component<NetworkGraphProps> {
+function NetworkGraph(props: NetworkGraphProps) {
 
-    ref!: SVGSVGElement
-    nodes: Node[];
-    links: NetworkLink[];
+    const svgElement = useRef<SVGSVGElement>(null);
+    var forceSimulation = useRef<any>();
 
-    constructor(props: NetworkGraphProps) {
-        super(props)
-        this.nodes = this.generateNodes(props.nodeCount, props.errorPercentage);
-        this.links = this.getConnectedLinks(this.nodes);
-    }
-
-    generateNodes(nodeCount: number, errorPercentage: number): Array<Node> {
+    function generateNodes(nodeCount: number, errorPercentage: number): Array<Node> {
         if(nodeCount <= 0) {
             throw new Error("Number must be positive/nonzero");
         }
@@ -174,7 +170,7 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
         return nodes;
     }
 
-    getConnectedLinks(nodes: Array<Node>): Array<NetworkLink> {
+    function getConnectedLinks(nodes: Array<Node>): Array<NetworkLink> {
         let links: Array<NetworkLink> = [];
         for(let i = 0; i < nodes.length - 1; i ++) {
             for(let j = i; j < nodes.length; j++) {
@@ -187,15 +183,9 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
         return links;
     }
 
-    buildGraph(nodes: Array<Node>, links: Array<NetworkLink>) {
+    function buildGraph(nodes: Array<Node>, links: Array<NetworkLink>, width: number, height: number) {
 
-        const svg = d3.select(this.ref)
-        
-        let width = this.ref.width.animVal.value
-        let height = parseInt(svg.attr('height'))
-
-        console.log(width)
-        console.log(height)
+        const svg = d3.select(svgElement.current)
 
         var link: any = svg.selectAll("line")
             .data(links, function(d: any) { return d.source.id + "-" + d.target.id })
@@ -217,13 +207,13 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
 
         text.text(function(d: any) { return d.previousProposal.number + ' ' + d.previousProposal.value })
 
-        var simulation: any = d3.forceSimulation(nodes)
+        let simulation = d3.forceSimulation(nodes)
             .force("link", d3.forceLink()
                 .id(function(d: any) { return d.id; })
                 .links(links)
             )
             .force("charge", d3.forceManyBody().strength(-800))
-            .force("center", d3.forceCenter(150, 200))
+            .force("center", d3.forceCenter(width/2, height/2))
             .on("tick", ticked);
         
         function ticked() {
@@ -240,7 +230,7 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
             text.text(function(d: any) { return d.previousProposal.number + ' ' + d.previousProposal.value })
         }
 
-        node.on("click", (e: any, d: any) => d.network.proposerId = d.id)
+        node.on("click", (e: any, d: any) => { d.network.proposerId = d.id; })
 
         function drag(simulation: any) {
 
@@ -268,21 +258,50 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
         }
 
         node.call(drag(simulation));
+
+        return simulation;
     }
 
-    componentDidUpdate() {
-        this.nodes = this.generateNodes(this.props.nodeCount, this.props.errorPercentage);
-        this.links = this.getConnectedLinks(this.nodes);
-        this.buildGraph(this.nodes, this.links);
-    }
 
-    componentDidMount() {
-        this.buildGraph(this.nodes, this.links);
-    }
+    useEffect(() => {
+        function handleResize() {
+            let width = 0;
+            let height = 0;
+            if(svgElement.current) {
+                width = svgElement.current.width.baseVal.value;
+                height = svgElement.current.height.baseVal.value;
+            }
+            if(forceSimulation.current) {   
+                forceSimulation.current.stop();
+                forceSimulation.current.force('center', d3.forceCenter(width/2, height/2));
+                forceSimulation.current.restart();
+            }
+        }
+        
+        handleResize()
+        window.addEventListener('resize', handleResize);
 
-    render() {
-        return ( 
-            <svg className="container" width='100%' height='100%' ref={(ref: SVGSVGElement) => this.ref = ref}></svg>
-        )
-    }
+        return () => window.removeEventListener('resize', handleResize)
+    })
+
+    useEffect(() => {
+        let width = 0;
+        let height = 0; 
+        if(svgElement.current) {
+            width = svgElement.current.width.baseVal.value;
+            height = svgElement.current.height.baseVal.value;
+        }
+        let nodes = generateNodes(props.nodeCount, props.errorPercentage);
+        let links = getConnectedLinks(nodes);
+        forceSimulation.current = buildGraph(nodes, links, width, height);
+    }, [])
+
+
+
+    return ( 
+        <svg className="container" width='100%' height='100%' ref={svgElement}></svg>
+    )
+    
 } 
+
+export default NetworkGraph;
