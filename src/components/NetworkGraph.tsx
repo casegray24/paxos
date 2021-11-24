@@ -147,8 +147,6 @@ interface NetworkLink {
 export class NetworkGraph extends React.Component<NetworkGraphProps> {
 
     ref!: SVGSVGElement
-    width: number = 500;
-    height: number = 500;
     nodes: Node[];
     links: NetworkLink[];
 
@@ -192,6 +190,12 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
     buildGraph(nodes: Array<Node>, links: Array<NetworkLink>) {
 
         const svg = d3.select(this.ref)
+        
+        let width = this.ref.width.animVal.value
+        let height = parseInt(svg.attr('height'))
+
+        console.log(width)
+        console.log(height)
 
         var link: any = svg.selectAll("line")
             .data(links, function(d: any) { return d.source.id + "-" + d.target.id })
@@ -219,7 +223,7 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
                 .links(links)
             )
             .force("charge", d3.forceManyBody().strength(-800))
-            .force("center", d3.forceCenter(this.width/2, this.height/2))
+            .force("center", d3.forceCenter(150, 200))
             .on("tick", ticked);
         
         function ticked() {
@@ -277,8 +281,8 @@ export class NetworkGraph extends React.Component<NetworkGraphProps> {
     }
 
     render() {
-        return (<div className="svg_container">
-            <svg className="container" ref={(ref: SVGSVGElement) => this.ref = ref} width='500' height='500'></svg>
-        </div>)
+        return ( 
+            <svg className="container" width='100%' height='100%' ref={(ref: SVGSVGElement) => this.ref = ref}></svg>
+        )
     }
-}
+} 
