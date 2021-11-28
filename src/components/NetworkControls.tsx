@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
-import NetworkGraph, { Node } from "./NetworkGraph"; 
+import NetworkGraph, { PaxosProtocolNetwork, generateNetwork } from "./NetworkGraph"; 
+import { cloneDeep } from 'lodash';
 import { 
     Container, 
     Flex, 
@@ -23,27 +24,29 @@ import {
 export default function NetworkControls() {
     
     const colSpan = useBreakpointValue({ base: 2, md: 1});
-    const [nodeCount, setNodeCount] = useState(3);
+    const [nodeCount, setNodeCount] = useState(5);
     const [errorPercentage, setErrorPercentage] = useState(0.0);
-    const [nodes, setNodes] = useState<Node[]>([]);
-    const nodeCountInputRef = useRef<HTMLInputElement>(null);
-    const errorPercentageInputRef = useRef<HTMLInputElement>(null);
+    const [proposalValue, setProposalValue] = useState(""); 
+    const [proposalNumber, setProposalNumber] = useState(0);
+    const [paxosProtocolNetwork, setPaxosProtocolNetwork] = useState<PaxosProtocolNetwork>(generateNetwork(nodeCount, errorPercentage));
     const graphContainer = useRef<HTMLDivElement>(null);
 
-    function handleClick() {
-        if(nodeCountInputRef.current) {
-            setNodeCount(parseInt(nodeCountInputRef.current.value));
-        }
-        if(errorPercentageInputRef.current) {
-            setErrorPercentage(parseFloat(errorPercentageInputRef.current.value));
-        }
+    function handleGenerateGraph() {
+        setPaxosProtocolNetwork(generateNetwork(nodeCount, errorPercentage));
+    }
+
+    function handlePropose() {
+        paxosProtocolNetwork.prepare(proposalNumber, proposalValue);
+        // It is important for data binding in D3 that this is done with a shallow copy
+        // It is not very "react" but d3 wasnt designed for react
+        setPaxosProtocolNetwork(Object.assign(new PaxosProtocolNetwork(), paxosProtocolNetwork))
     }
 
     function handleProposerChange(nodeId: number) {
-        setNodes((previousNodes) => {
-            let newNodes = [...previousNodes];
-            newNodes[0].network.proposerId = nodeId;
-            return newNodes;
+        setPaxosProtocolNetwork((previousNetwork) => {
+            let newNetwork = cloneDeep(previousNetwork);
+            newNetwork.proposerId = nodeId;
+            return newNetwork;
         })
     }
 
@@ -59,8 +62,8 @@ export default function NetworkControls() {
                         <GridItem colSpan={colSpan}>
                             <FormControl>
                                 <FormLabel>Number of Nodes</FormLabel>
-                                <NumberInput defaultValue={nodeCount} min={3} max={30}>
-                                    <NumberInputField ref={nodeCountInputRef} />
+                                <NumberInput value={nodeCount} min={3} max={30} onChange={(value) => setNodeCount(parseInt(value))}>
+                                    <NumberInputField />
                                     <NumberInputStepper>
                                         <NumberIncrementStepper />
                                         <NumberDecrementStepper />
@@ -71,8 +74,8 @@ export default function NetworkControls() {
                         <GridItem colSpan={colSpan}>
                             <FormControl>
                                 <FormLabel>Error Percentage</FormLabel>
-                                <NumberInput defaultValue={errorPercentage} min={0} max={1} step={0.01}>
-                                    <NumberInputField ref={errorPercentageInputRef} />
+                                <NumberInput value={errorPercentage} min={0} max={1} step={0.01} onChange={(value) => setErrorPercentage(parseFloat(value))}>
+                                    <NumberInputField />
                                     <NumberInputStepper>
                                         <NumberIncrementStepper />
                                         <NumberDecrementStepper />
@@ -81,12 +84,12 @@ export default function NetworkControls() {
                             </FormControl>
                         </GridItem>
                         <GridItem colSpan={2}>
-                            <Button size="lg" w="full" onClick={handleClick}>Generate Graph</Button>
+                            <Button size="lg" w="full" onClick={handleGenerateGraph}>Generate Graph</Button>
                         </GridItem>
                         <GridItem colSpan={colSpan}>
                             <FormControl>
                                 <FormLabel>Proposal Number</FormLabel>
-                                <NumberInput min={0}>
+                                <NumberInput value={proposalNumber} min={0} onChange={(value) => setProposalNumber(parseInt(value))}>
                                     <NumberInputField />
                                     <NumberInputStepper>
                                         <NumberIncrementStepper />
@@ -98,13 +101,16 @@ export default function NetworkControls() {
                         <GridItem colSpan={colSpan}>
                             <FormControl>
                                 <FormLabel>Proposal Value</FormLabel>
-                                <Input />
+                                <Input placeholder="Fill in any value (e.g. 'foo')" value={proposalValue} onChange={(event) => setProposalValue(event.target.value)} />
                             </FormControl>
+                        </GridItem>
+                        <GridItem colSpan={2}>
+                            <Button size="lg" w="full" onClick={handlePropose}>Propose Value</Button>
                         </GridItem>
                     </SimpleGrid>
                 </VStack>
                 <VStack w="full" h="full" p={0} spacing={0} alignItems="flex-start" ref={graphContainer}>
-                    <NetworkGraph nodeCount={nodeCount} errorPercentage={errorPercentage} onProposerChange={handleProposerChange} />
+                    <NetworkGraph paxosProtocolNetwork={paxosProtocolNetwork} onProposerChange={handleProposerChange} />
                 </VStack>
             </Flex>
         </Container>
