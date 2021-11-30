@@ -1,38 +1,61 @@
-import React, { useState } from "react";
-import { NetworkGraph } from "./NetworkGraph";
-import { Container, Flex, VStack } from "@chakra-ui/react";
+import { 
+    SimpleGrid, 
+    GridItem, 
+    FormControl, 
+    FormLabel, 
+    NumberInput, 
+    NumberInputField, 
+    NumberInputStepper, 
+    NumberIncrementStepper, 
+    NumberDecrementStepper,
+    Tooltip,
+    Button
+} from "@chakra-ui/react"
 
-export default function NetworkControls() {
-    
-    const [nodeCount, setNodeCount] = useState(2);
-    const [errorPercentage, setErrorPercentage] = useState(0.0);
+interface NetworkControlsProps {
+    nodeCount: number;
+    errorPercentage: number;
+    onNodeCountChange: onNodeCountCallback;
+    onErrorPercentageChange: onNodeCountCallback;
+    onGenerateGraph: onGenerateGraphCallback;
+    colSpan?: number;
+}
 
-    function onChangeNodeCount(e: React.ChangeEvent<HTMLInputElement>) {
-        const re = /^[0-9\b]+$/;
-        if(re.test(e.target.value)) {
-            let nodeCount = parseInt(e.target.value);
-            if(nodeCount > 30) {
-                console.log("Number is too high")
-            } else {
-                setNodeCount(nodeCount);
-            }
-        }
-        else if(e.target.value === "") {
-            setNodeCount(0);
-        }
-    }
+type onNodeCountCallback = (value: string) => any;
+type onGenerateGraphCallback = (nodeCount: number, errorPercentage: number) => any;
 
+export default function NetworkControls(props: NetworkControlsProps) {
     return (
-        <Container maxWidth="container.xl" padding={0}>
-            <Flex h="100vh" py={20}>
-                <VStack w="full" h="full" p={10} spacing={10} alignItems="flex-start" bg="gray.50">
-                    <h4>Number of nodes</h4><input type="text" value={nodeCount} onChange={onChangeNodeCount}></input>
-                    <h4>Error Percentage</h4><input type="text" value={errorPercentage} onChange={(e) => setErrorPercentage(parseInt(e.target.value))}></input>
-                </VStack>
-                <VStack w="full" h="full" p={10} spacing={10} alignItems="flex-start">
-                    <NetworkGraph nodeCount={nodeCount} errorPercentage={errorPercentage} />
-                </VStack>
-            </Flex>
-        </Container>
-    );
+        <SimpleGrid columns={2} columnGap={3} rowGap={6} w="full">
+            <GridItem colSpan={props.colSpan}>
+                <FormControl>
+                    <FormLabel>Number of Nodes</FormLabel>
+                    <NumberInput value={props.nodeCount} min={3} max={25} onChange={(value) => props.onNodeCountChange(value)}>
+                        <NumberInputField />
+                        <NumberInputStepper>
+                            <NumberIncrementStepper />
+                            <NumberDecrementStepper />
+                        </NumberInputStepper>
+                    </NumberInput>
+                </FormControl>
+            </GridItem>
+            <GridItem colSpan={props.colSpan}>
+                <FormControl>
+                    <FormLabel>Error Percentage</FormLabel>
+                    <Tooltip label="Chance for a request to a node to fail">
+                        <NumberInput value={props.errorPercentage} min={0} max={1} step={0.01} onChange={(value) => props.onErrorPercentageChange(value)}>
+                            <NumberInputField />
+                            <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                            </NumberInputStepper>
+                        </NumberInput>
+                    </Tooltip>
+                </FormControl>
+            </GridItem>
+            <GridItem colSpan={2}>
+                <Button size="lg" w="full" onClick={() => props.onGenerateGraph(props.nodeCount, props.errorPercentage)}>Generate Graph</Button>
+            </GridItem>
+        </SimpleGrid>
+    )
 }
