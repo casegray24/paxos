@@ -1,0 +1,22 @@
+{
+  "files": {
+    "main.css": "/paxos/static/css/main.8c8b27cf.chunk.css",
+    "main.js": "/paxos/static/js/main.da956bde.chunk.js",
+    "main.js.map": "/paxos/static/js/main.da956bde.chunk.js.map",
+    "runtime-main.js": "/paxos/static/js/runtime-main.06d8f069.js",
+    "runtime-main.js.map": "/paxos/static/js/runtime-main.06d8f069.js.map",
+    "static/js/2.d7ce8bc9.chunk.js": "/paxos/static/js/2.d7ce8bc9.chunk.js",
+    "static/js/2.d7ce8bc9.chunk.js.map": "/paxos/static/js/2.d7ce8bc9.chunk.js.map",
+    "static/js/3.090e71dd.chunk.js": "/paxos/static/js/3.090e71dd.chunk.js",
+    "static/js/3.090e71dd.chunk.js.map": "/paxos/static/js/3.090e71dd.chunk.js.map",
+    "index.html": "/paxos/index.html",
+    "static/css/main.8c8b27cf.chunk.css.map": "/paxos/static/css/main.8c8b27cf.chunk.css.map",
+    "static/js/2.d7ce8bc9.chunk.js.LICENSE.txt": "/paxos/static/js/2.d7ce8bc9.chunk.js.LICENSE.txt"
+  },
+  "entrypoints": [
+    "static/js/runtime-main.06d8f069.js",
+    "static/js/2.d7ce8bc9.chunk.js",
+    "static/css/main.8c8b27cf.chunk.css",
+    "static/js/main.da956bde.chunk.js"
+  ]
+}
