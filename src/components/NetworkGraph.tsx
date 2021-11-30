@@ -1,141 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import * as d3 from "d3";
-import { SimulationNodeDatum } from "d3-force";
-
-enum NodeType {
-    Acceptor,
-    Proposer
-}
-
-export class Proposal {
-    constructor(public number: number = -1, public value: string = '') { }
-}
-
-
-export class PaxosProtocolNetwork {
-
-    nodes: Array<Node>;
-    nodeIdLookup: { [key: number] : Node };
-    _proposerId?: number;
-    chosenValue?: string;
-
-    constructor(nodes: Array<Node> = []) {
-        this.nodeIdLookup = {};
-        this.nodes = [];
-        for(let node of nodes) {
-            this.registerNode(node);
-        }
-    }
-
-    get proposer() {
-        if(this._proposerId === undefined) {
-            throw new Error("There is no proposer id set");
-        }
-        return this.nodeIdLookup[this._proposerId];
-    }
-
-    set proposerId(id: number) {
-        if(this._proposerId !== undefined) {
-            this.nodeIdLookup[this._proposerId].nodeType = NodeType.Acceptor;
-        }
-        this.nodeIdLookup[id].nodeType = NodeType.Proposer;
-        this._proposerId = id;
-    }
-
-    registerNode(node: Node) {
-        this.nodeIdLookup[node.id] = node;
-        this.nodes.push(node);
-    }
-
-    propose(proposal: Proposal) {
-        let responses = 0;
-        for(let acceptor of this.nodes) {
-            try {
-                acceptor.handlePropose(proposal);
-                responses++;
-            } catch(e) {
-                console.log(e);
-            }
-        }
-        if(responses > this.nodes.length/2) {
-            this.chosenValue = proposal.value;
-        }
-    }
-
-    prepare(proposalNumber: number, proposalValue: string) {
-        let maxProposal = new Proposal();
-        let responses = 0;
-        for(let acceptor of this.nodes) {
-            try {
-                let proposal = acceptor.handlePrepare(proposalNumber);
-                if(proposal.number > maxProposal.number) {
-                    maxProposal = proposal;
-                }
-                responses++
-            } catch(e) {
-                console.log(e);
-            }
-        }
-        if(responses > this.nodes.length/2) {
-            if(maxProposal.number > -1) {
-                proposalValue = maxProposal.value;
-            }
-            this.propose(new Proposal(proposalNumber, proposalValue));
-        }
-    }
-
-}
-
-
-export class Node implements SimulationNodeDatum {
-
-    static uniqueId = 0;
-
-    errorPercentage: number;
-    nodeType: NodeType;
-    maxAcceptableProposalNumber: number;
-    previousProposal: Proposal;
-    id: number;
-    x: number;
-    y: number;
-
-    constructor(errorPercentage: number, nodeType: NodeType, x: number = 0, y: number = 0) {
-        this.errorPercentage = errorPercentage;
-        this.nodeType = nodeType;
-        this.x = 0;
-        this.y = 0;
-        this.maxAcceptableProposalNumber = 0;
-        this.previousProposal = new Proposal();
-        this.id = Node.uniqueId++;
-    }
-
-    failsRequest() {
-        return (this.errorPercentage > Math.random())
-    }
-
-    handlePrepare(proposalNumber: number) {
-        if(this.failsRequest()) {
-            throw new Error("Failure to handle request");
-        }
-        if(proposalNumber < this.maxAcceptableProposalNumber) {
-            throw new Error("Proposal number is too low");
-        }
-        this.maxAcceptableProposalNumber = proposalNumber;
-        return this.previousProposal;
-    }
-
-    handlePropose(proposal: Proposal) {
-        if(this.failsRequest()) {
-            throw new Error("Failure to handle request");
-        }
-        if(proposal.number < this.maxAcceptableProposalNumber) {
-            throw new Error("Proposal number is too low");
-        }
-        this.maxAcceptableProposalNumber = proposal.number;
-        this.previousProposal = proposal;
-    }
-
-} 
+import { Node, NodeType } from '../models/Node'
+import { PaxosProtocolNetwork } from '../models/PaxosNetworkProtocol'
 
 type proposerCallback = (id: number) => any;
 
@@ -149,20 +15,6 @@ interface NetworkLink {
     target: number;
 }
 
-export function generateNetwork(nodeCount: number, errorPercentage: number): PaxosProtocolNetwork {
-    if(nodeCount <= 0) {
-        throw new Error("Number must be positive/nonzero");
-    }
-    let paxosProtocolNetwork = new PaxosProtocolNetwork();
-    let proposer: Node = new Node(errorPercentage, NodeType.Proposer);
-    paxosProtocolNetwork.registerNode(proposer);
-    paxosProtocolNetwork.proposerId = proposer.id;
-    for(let i = 1; i < nodeCount; i++) {
-        let node = new Node(errorPercentage, NodeType.Acceptor);
-        paxosProtocolNetwork.registerNode(node);
-    }
-    return paxosProtocolNetwork;
-}
 
 function NetworkGraph(props: NetworkGraphProps) {
 
@@ -183,7 +35,6 @@ function NetworkGraph(props: NetworkGraphProps) {
     }
 
     function buildGraph(nodes: Array<Node>, links: Array<NetworkLink>, width: number, height: number, onProposerChange: proposerCallback) {
-        console.log(nodes)
         const svg = d3.select(svgElement.current)
 
         var linkElements = svg.selectAll("line")
@@ -192,28 +43,46 @@ function NetworkGraph(props: NetworkGraphProps) {
                 (enter) => enter.append("line").style("stroke", "#aaa")
             )
 
+        console.log(nodes)
+
         var nodeElements: any = svg.selectAll('g.node')
-            .data(nodes, (d: any) => d.id )
+            .data(nodes, (d: any) => d.d3Id )
             .join(
                 (enter) => { 
                     let nodeGroup = enter.append("g").attr("class", "node")
 
                     nodeGroup.append("circle")
                         .attr("r", 30)
+                        .attr("class", "body")
                         .style("fill", (d: any) => d.nodeType === NodeType.Acceptor ? 'gray' : 'green' )
+
+                    nodeGroup.append("circle")
+                        .attr("r", 10)
+                        .attr("class", "id")
+                        .attr("cy", -20)
+                        .attr("cx", -19)
+                        .style("fill", "white")
+
+                    nodeGroup.append("text")
+                        .attr("class", "id")
+                        .style("text-anchor", "middle")
+                        .attr("y", -15)
+                        .attr("x", -19)
+                        .text((d: any) => d.id)
                     
                     nodeGroup.append("text")
+                        .attr("class", "proposal")
                         .style("text-anchor", "middle")
-                        .attr("y", 15)
-                        .text((d: any) => d.previousProposal.number + ' ' + d.previousProposal.value )
+                        .attr("y", 8)
+                        .text((d: any) => d.previousProposal.number + '/' + d.previousProposal.value + '/' + d.maxAcceptableProposalNumber)
 
                     return nodeGroup
                 },
                 (update) => {
                     
-                    update.selectAll("circle").style("fill", (d: any) => d.nodeType === NodeType.Acceptor ? 'gray' : 'green' )
+                    update.selectAll("circle.body").style("fill", (d: any) => { console.log(d); return d.nodeType === NodeType.Acceptor ? 'gray' : 'green' })
 
-                    update.selectAll("text").text((d: any) => { console.log(d); return d.previousProposal.number + ' ' + d.previousProposal.value})
+                    update.selectAll("text.proposal").text((d: any) => d.previousProposal.number + '/' + d.previousProposal.value + '/' + d.maxAcceptableProposalNumber)
 
                     update.raise() // Ensure nodes are drawn above lines
 
@@ -295,16 +164,16 @@ function NetworkGraph(props: NetworkGraphProps) {
     })
 
     useEffect(() => {
-        console.log("updated")
+        console.log(forceSimulation.current)
         let width = 0;
         let height = 0; 
         if(svgElement.current) {
             width = svgElement.current.width.baseVal.value;
             height = svgElement.current.height.baseVal.value;
-        }
+        } 
         let links = getConnectedLinks(props.paxosProtocolNetwork.nodes);
         forceSimulation.current = buildGraph(props.paxosProtocolNetwork.nodes, links, width, height, props.onProposerChange);
-    }, [props.paxosProtocolNetwork, props.onProposerChange])
+    }, [props.paxosProtocolNetwork])
 
     return ( 
         <svg className="container" width='100%' height='100%' ref={svgElement}></svg>

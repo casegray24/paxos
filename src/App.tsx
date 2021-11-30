@@ -1,10 +1,10 @@
 import './App.css';
-import NetworkControls from './components/NetworkControls';
+import NetworkLayout from './components/NetworkLayout';
 
 function App() {
   return (
     <div className="App">
-      <NetworkControls/>
+      <NetworkLayout/>
     </div>
   );
 }
